@@ -1,0 +1,24 @@
+{
+  "pages": [
+    {
+      "path": "pages/index/index",
+      "style": {
+        "navigationBarTitleText": "升学规划",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/plan/plan",
+      "style": {
+        "navigationBarTitleText": "我的规划",
+        "navigationStyle": "custom"
+      }
+    }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "升学规划",
+    "navigationBarBackgroundColor": "#FFFFFF",
+    "backgroundColor": "#F4F5FA"
+  }
+}
