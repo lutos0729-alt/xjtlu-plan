@@ -47,27 +47,27 @@
         </view>
       </view>
 
-      <!-- 专业 -->
-      <view class="form-section">
+      <!-- 专业/项目（选完年级后才出现） -->
+      <view v-if="form.grade" class="form-section">
         <view class="section-label">
-          <text class="label-text">专业</text>
+          <text class="label-text">{{ isGrad ? '项目+学制' : '专业' }}</text>
           <text class="label-tag">必填</text>
         </view>
         <view class="input-wrap">
           <input
             class="text-input"
             v-model="form.major"
-            placeholder="如：计算机科学与技术"
+            :placeholder="isGrad ? '如：金融工程 1.5年制 / 计算机科学 2年制' : '如：计算机科学与技术'"
             placeholder-class="ph"
             maxlength="30"
           />
         </view>
       </view>
 
-      <!-- 意向方向 -->
+      <!-- 申请类型 -->
       <view class="form-section">
         <view class="section-label">
-          <text class="label-text">意向方向</text>
+          <text class="label-text">申请类型</text>
           <text class="label-tag">必选</text>
         </view>
         <view class="direction-list">
@@ -84,6 +84,23 @@
             </view>
             <text class="dir-desc">{{ d.desc }}</text>
           </view>
+        </view>
+      </view>
+
+      <!-- 意向方向 -->
+      <view class="form-section">
+        <view class="section-label">
+          <text class="label-text">意向方向</text>
+          <text class="label-tag optional">选填</text>
+        </view>
+        <view class="input-wrap">
+          <input
+            class="text-input"
+            v-model="form.intendedDirection"
+            placeholder="如：计算机视觉 / 金融工程 / HCI"
+            placeholder-class="ph"
+            maxlength="30"
+          />
         </view>
       </view>
 
@@ -132,26 +149,22 @@
         </view>
       </view>
 
-      <!-- DeepSeek API Key（选填） -->
+      <!-- 补充说明 -->
       <view class="form-section">
         <view class="section-label">
-          <text class="label-text">DeepSeek API Key</text>
+          <text class="label-text">补充说明</text>
           <text class="label-tag optional">选填</text>
         </view>
-        <input
-          class="form-input api-input"
-          v-model="form.apiKey"
-          type="text"
-          password
-          placeholder="填入后可生成 AI 个性化建议"
+        <textarea
+          class="textarea-input"
+          v-model="form.note"
+          placeholder="写下你的想法，如：对AI方向感兴趣，有一段腾讯实习，想申美国Top30的MSCS项目..."
           placeholder-class="ph"
+          maxlength="500"
+          :auto-height="true"
         />
-        <view class="api-tip">
-          <text class="tip-text">前往 </text>
-          <text class="tip-link" @tap="openDeepSeek">platform.deepseek.com</text>
-          <text class="tip-text"> 注册获取 API Key，费用约 0.01 元/次</text>
-        </view>
       </view>
+
     </view>
 
     <!-- 生成按钮 -->
@@ -178,10 +191,13 @@ const form = reactive({
   grade: '',
   major: '',
   direction: '',
+  intendedDirection: '',
   countries: [],
-  apiKey: ''
+  note: ''
 })
 const showOther = ref(false)
+
+const isGrad = computed(() => form.grade === '研一' || form.grade === '研二')
 
 const canSubmit = computed(
   () => form.grade && form.major.trim() && form.direction && form.countries.length > 0
@@ -205,16 +221,15 @@ function onSubmit() {
     grade: form.grade,
     major: form.major.trim(),
     direction: form.direction,
+    intendedDirection: form.intendedDirection.trim(),
     countries: form.countries,
-    apiKey: form.apiKey.trim()
+    note: form.note.trim()
   })
-  uni.navigateTo({ url: '/pages/plan/plan' })
-}
-
-function openDeepSeek() {
-  // #ifdef H5
-  window.open('https://platform.deepseek.com', '_blank')
-  // #endif
+  uni.navigateTo({
+    url: '/pages/plan/plan',
+    animationType: 'fade-in',
+    animationDuration: 400
+  })
 }
 </script>
 
@@ -223,6 +238,12 @@ function openDeepSeek() {
   min-height: 100vh;
   background: #f4f5fa;
   padding-bottom: 60rpx;
+  animation: fadeInUp 0.5s ease-out;
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* 顶部 */
@@ -375,34 +396,22 @@ function openDeepSeek() {
 .ph {
   color: #9ca3af;
 }
+
+/* 补充说明 */
+.textarea-input {
+  width: 100%;
+  min-height: 140rpx;
+  background: #f5f6fa;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  font-size: 26rpx;
+  color: #1a1a2e;
+  line-height: 1.6;
+  box-sizing: border-box;
+}
 .label-tag.optional {
   color: #9ca3af;
   background: #f3f4f6;
-}
-.api-input {
-  height: 88rpx;
-  font-size: 26rpx;
-  color: #1a1a2e;
-  background: #f5f6fa;
-  border-radius: 16rpx;
-  padding: 0 24rpx;
-}
-.api-tip {
-  margin-top: 16rpx;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 4rpx;
-}
-.tip-text {
-  font-size: 22rpx;
-  color: #9ca3af;
-}
-.tip-link {
-  font-size: 22rpx;
-  color: #6366f1;
-  font-weight: 600;
-  text-decoration: underline;
 }
 
 /* 方向 */

@@ -21,9 +21,12 @@
               </view>
             </view>
             <text class="hero-major">{{ plan.overview.major }}</text>
+            <text v-if="plan.overview.intendedDirection" class="hero-direction">方向：{{ plan.overview.intendedDirection }}</text>
             <view class="hero-meta">
               <text class="meta-item">意向：{{ plan.overview.countryLabels.join(' / ') }}</text>
               <text class="meta-dot">·</text>
+              <text class="meta-item" v-if="plan.overview.duration">{{ plan.overview.duration }} 年制</text>
+              <text class="meta-dot" v-if="plan.overview.duration">·</text>
               <text class="meta-item">剩余 {{ plan.overview.remainingYears }} 年</text>
               <text class="meta-dot">·</text>
               <text class="meta-item">{{ plan.overview.stage }}</text>
@@ -181,41 +184,21 @@
         <view class="note-card">
           <text class="note-text">{{ plan.overview.keyPoints }}</text>
           <text class="note-gen">生成日期：{{ plan.generatedAt }}</text>
+        </view>
       </view>
-    </view>
 
-      <!-- AI 个性化建议 -->
-      <view class="section ai-section">
+      <!-- 个性化建议（基于补充说明关键词匹配） -->
+      <view v-if="plan.hasNote && plan.personalTips.length" class="section personal-section">
         <view class="section-head">
-          <view class="section-icon">✨</view>
-          <text class="section-title">AI 个性化建议</text>
-          <view v-if="aiAdvice && !aiLoading" class="ai-badge">已生成</view>
+          <view class="section-icon">🎯</view>
+          <text class="section-title">个性化建议</text>
+          <view class="personal-badge">基于你的补充说明</view>
         </view>
-
-        <view v-if="!aiAdvice && !aiLoading && !aiError" class="ai-card">
-          <text class="ai-hint">基于你的专业和目标，AI 可生成更有针对性的建议</text>
-          <button v-if="apiKey" class="ai-btn" @tap="fetchAIAdvice">生成 AI 建议</button>
-          <text v-else class="ai-warn">需在首页填写 DeepSeek API Key 后使用</text>
-        </view>
-
-        <view v-if="aiLoading" class="ai-card">
-          <view class="ai-spinner-wrap">
-            <view class="ai-spinner"></view>
-            <text class="ai-loading-text">AI 正在生成个性化建议...</text>
+        <view class="personal-list">
+          <view v-for="(tip, ti) in plan.personalTips" :key="ti" class="personal-item">
+            <view class="personal-cat">{{ tip.category }}</view>
+            <text class="personal-tip">{{ tip.tip }}</text>
           </view>
-        </view>
-
-        <view v-if="aiAdvice && !aiLoading" class="ai-card">
-          <view class="ai-advice" v-for="(line, li) in aiAdviceLines" :key="li">
-            <text v-if="line.isHeading" class="ai-heading">{{ line.text }}</text>
-            <text v-else class="ai-line">{{ line.text }}</text>
-          </view>
-          <button class="ai-btn ai-btn-sm" @tap="fetchAIAdvice">重新生成</button>
-        </view>
-
-        <view v-if="aiError && !aiLoading" class="ai-card">
-          <text class="ai-error-text">{{ aiError }}</text>
-          <button class="ai-btn ai-btn-sm" @tap="fetchAIAdvice">重试</button>
         </view>
       </view>
     </view>
@@ -232,30 +215,15 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { generatePlan } from '@/utils/planner.js'
-import { generateAIAdvice } from '@/utils/ai.js'
+// #ifdef H5
+import html2canvas from 'html2canvas'
+import { jsPDF } from 'jspdf'
+// #endif
 
 const plan = ref(null)
 const exporting = ref(false)
-const apiKey = ref('')
-const aiLoading = ref(false)
-const aiAdvice = ref('')
-const aiError = ref('')
-
-const aiAdviceLines = computed(() => {
-  if (!aiAdvice.value) return []
-  return aiAdvice.value
-    .split('\n')
-    .filter((l) => l.trim())
-    .map((l) => {
-      const trimmed = l.trim()
-      if (trimmed.startsWith('### ')) {
-        return { isHeading: true, text: trimmed.replace(/^###\s+/, '').replace(/\*\*/g, '') }
-      }
-      return { isHeading: false, text: trimmed.replace(/\*\*/g, '') }
-    })
-})
 
 onMounted(() => {
   const input = uni.getStorageSync('planInput')
@@ -263,7 +231,6 @@ onMounted(() => {
     uni.redirectTo({ url: '/pages/index/index' })
     return
   }
-  apiKey.value = input.apiKey || ''
   try {
     plan.value = generatePlan(input)
   } catch (e) {
@@ -302,9 +269,6 @@ async function exportPDF() {
 
   // #ifdef H5
   try {
-    const html2canvas = (await import('html2canvas/dist/html2canvas.esm.js')).default
-    const { jsPDF } = await import('jspdf/dist/jspdf.es.min.js')
-
     const el = document.querySelector('.export-area')
     if (!el) throw new Error('未找到内容区域')
 
@@ -342,7 +306,8 @@ async function exportPDF() {
     uni.showToast({ title: 'PDF 已生成', icon: 'success' })
   } catch (e) {
     uni.hideLoading()
-    uni.showToast({ title: '导出失败，请重试', icon: 'none' })
+    const errMsg = e && e.message ? e.message : String(e)
+    uni.showToast({ title: '导出失败：' + errMsg.slice(0, 50), icon: 'none', duration: 5000 })
     console.error('PDF export error:', e)
   }
   // #endif
@@ -354,26 +319,6 @@ async function exportPDF() {
 
   exporting.value = false
 }
-
-async function fetchAIAdvice() {
-  if (aiLoading.value || !plan.value) return
-  if (!apiKey.value) {
-    aiError.value = '请先在首页填写 DeepSeek API Key'
-    return
-  }
-  aiLoading.value = true
-  aiError.value = ''
-  aiAdvice.value = ''
-  try {
-    const input = uni.getStorageSync('planInput')
-    const advice = await generateAIAdvice(input, plan.value, apiKey.value)
-    aiAdvice.value = advice
-  } catch (e) {
-    aiError.value = e.message || '生成失败，请检查 API Key 和网络后重试'
-  } finally {
-    aiLoading.value = false
-  }
-}
 </script>
 
 <style lang="scss" scoped>
@@ -381,6 +326,12 @@ async function fetchAIAdvice() {
   min-height: 100vh;
   background: #f4f5fa;
   padding-bottom: 140rpx;
+  animation: fadeInUp 0.5s ease-out;
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* Hero */
@@ -441,6 +392,13 @@ async function fetchAIAdvice() {
   color: #fff;
   font-size: 44rpx;
   font-weight: 800;
+  display: block;
+  margin-bottom: 16rpx;
+}
+.hero-direction {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 28rpx;
+  font-weight: 600;
   display: block;
   margin-bottom: 16rpx;
 }
@@ -858,113 +816,47 @@ async function fetchAIAdvice() {
   }
 }
 
-/* AI 个性化建议 */
-.ai-section {
-  background: linear-gradient(135deg, #faf5ff, #eff6ff);
+/* 个性化建议 */
+.personal-section {
+  background: linear-gradient(135deg, #f0fdf4, #ecfdf5);
   border-radius: 28rpx;
   padding: 32rpx;
-  border: 2rpx solid #e9d5ff;
+  border: 2rpx solid #bbf7d0;
 }
-.ai-badge {
+.personal-badge {
   font-size: 20rpx;
-  color: #7c3aed;
-  background: #ede9fe;
+  color: #059669;
+  background: #d1fae5;
   padding: 6rpx 16rpx;
   border-radius: 8rpx;
   font-weight: 700;
   margin-left: auto;
 }
-.ai-card {
-  background: rgba(255, 255, 255, 0.8);
-  border-radius: 20rpx;
-  padding: 32rpx;
+.personal-list {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 20rpx;
-}
-.ai-hint {
-  font-size: 26rpx;
-  color: #6b7280;
-  line-height: 1.6;
-  text-align: center;
-}
-.ai-btn {
-  background: linear-gradient(135deg, #7c3aed, #a855f7);
-  color: #fff;
-  font-size: 28rpx;
-  font-weight: 700;
-  height: 80rpx;
-  line-height: 80rpx;
-  border-radius: 40rpx;
-  padding: 0 48rpx;
-  border: none;
-  box-shadow: 0 6rpx 20rpx rgba(124, 58, 237, 0.3);
-  &::after {
-    border: none;
-  }
-}
-.ai-btn-sm {
-  font-size: 24rpx;
-  height: 64rpx;
-  line-height: 64rpx;
-  padding: 0 36rpx;
-  margin-top: 8rpx;
-}
-.ai-warn {
-  font-size: 24rpx;
-  color: #ef4444;
-}
-.ai-spinner-wrap {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
   gap: 24rpx;
-  padding: 20rpx 0;
 }
-.ai-spinner {
-  width: 56rpx;
-  height: 56rpx;
-  border: 6rpx solid #e9d5ff;
-  border-top-color: #7c3aed;
-  border-radius: 50%;
-  animation: ai-spin 0.7s linear infinite;
+.personal-item {
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 16rpx;
+  padding: 24rpx 28rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
 }
-@keyframes ai-spin {
-  to {
-    transform: rotate(360deg);
-  }
+.personal-cat {
+  font-size: 22rpx;
+  color: #059669;
+  font-weight: 700;
+  background: #d1fae5;
+  align-self: flex-start;
+  padding: 4rpx 16rpx;
+  border-radius: 8rpx;
 }
-.ai-loading-text {
-  font-size: 26rpx;
-  color: #7c3aed;
-  font-weight: 600;
-}
-.ai-advice {
-  width: 100%;
-}
-.ai-heading {
-  font-size: 28rpx;
-  font-weight: 800;
-  color: #5b21b6;
-  display: block;
-  margin-top: 24rpx;
-  margin-bottom: 12rpx;
-  &:first-child {
-    margin-top: 0;
-  }
-}
-.ai-line {
+.personal-tip {
   font-size: 26rpx;
   color: #374151;
   line-height: 1.7;
-  display: block;
-  margin-bottom: 8rpx;
-}
-.ai-error-text {
-  font-size: 26rpx;
-  color: #ef4444;
-  text-align: center;
-  line-height: 1.6;
 }
 </style>

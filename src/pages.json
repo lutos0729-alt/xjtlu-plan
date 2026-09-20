@@ -1,6 +1,13 @@
 {
   "pages": [
     {
+      "path": "pages/cover/cover",
+      "style": {
+        "navigationBarTitleText": "XJTLU 升学规划",
+        "navigationStyle": "custom"
+      }
+    },
+    {
       "path": "pages/index/index",
       "style": {
         "navigationBarTitleText": "升学规划",
